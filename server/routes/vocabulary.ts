@@ -169,7 +169,7 @@ vocabularyRouter.post('/:id/image', async (req, res) => {
 })
 
 /** Manual equivalent of the monthly auto-clear. */
-vocabularyRouter.post('/reset', (req, res) => {
-  resetStore('manual')
+vocabularyRouter.post('/reset', async (req, res) => {
+  await resetStore('manual')
   res.json(snapshot(req.user!.id))
 })

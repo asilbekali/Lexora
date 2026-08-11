@@ -275,26 +275,17 @@ npm start
 
 The application honours the `$PORT` environment variable.
 
-### Persistent storage
+### Storage is chosen automatically
 
-All data — accounts, words, and progress — lives in:
+All data — accounts, words, and progress — lives in one JSON document. Where
+that document is kept depends on the host:
 
-```text
-server/data/db.json
-```
+| Host                        | Driver        | Notes                                    |
+| --------------------------- | ------------- | ---------------------------------------- |
+| Local, Render, Railway, Fly | file          | `server/data/db.json`, or a mounted disk |
+| Vercel                      | Upstash Redis | serverless filesystems are ephemeral      |
 
-The host therefore needs a persistent writable filesystem.
-
-Vercel and Netlify will not work with the current file-backed storage
-implementation as-is.
-
-Hosts that can work with persistent storage include:
-
-* Render
-* Railway
-* Fly.io
-
-Configure the persistent disk with:
+On a host with a real disk, point the store at it:
 
 ```ini
 DATA_FILE=/data/db.json
@@ -307,27 +298,39 @@ ARCHIVE_DIR=/data/archive
 NODE_ENV=production
 SESSION_SECRET=<long random string>
 ADMIN_USERNAME=asilbek
-ADMIN_PASSWORD_HASH=scrypt$...
+ADMIN_PASSWORD_HASH=scrypt$...     # from: npm run hash-password -- 'your-password'
 GEMINI_API_KEY=<your key>
-DATA_FILE=/data/db.json
-ARCHIVE_DIR=/data/archive
 ```
 
 Production deliberately refuses to start with a plaintext `ADMIN_PASSWORD`.
 
-### If you specifically want Vercel
+### Vercel
 
-Keep the frontend on Vercel and swap the storage layer for a hosted database.
+Vercel serves `dist/` statically and routes every `/api/*` request to the
+serverless function in `api/[[...path]].ts`, which runs the same Express app.
+Without that function Vercel would only see a static site and answer 404 to
+every endpoint.
 
-Possible options include:
+Because a serverless filesystem is wiped between invocations, the JSON store
+moves to **Upstash Redis** — the whole database stays one JSON document, just
+kept in Redis instead of a file.
 
-* Vercel Postgres
-* Turso
-* Supabase
-* MongoDB Atlas
+1. Vercel dashboard → **Storage** → add **Upstash Redis** (free tier). It sets
+   `KV_REST_API_URL` and `KV_REST_API_TOKEN` for you.
+2. Add the environment variables listed above.
+3. Redeploy.
 
-Only the database/store layer needs to be rewritten because the routes,
-authentication layer, and frontend already use user-scoped records.
+The driver is chosen automatically: Upstash when those two variables exist, a
+file otherwise. Nothing to configure in code, and local development is
+unaffected. If the app is deployed to a serverless host with no Redis attached
+it refuses to start and says so, rather than silently losing every account.
+
+One caveat worth knowing: writes are read-modify-write on a single document, so
+two people saving in the same instant can have one overwrite the other. Writes
+are coalesced and flushed before each response, which makes the window very
+small, but it is not zero. At a few dozen users this is fine; beyond that, move
+`server/db.ts` and `server/store.ts` onto Postgres.
+
 
 ---
 
