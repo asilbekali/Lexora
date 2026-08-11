@@ -1,6 +1,4 @@
-Yep. Here is the **copyable README content** exactly as provided in your uploaded file:
-
-````markdown
+```
 # Lexora
 
 A single-page vocabulary and spelling trainer: you add English words, AI fills in
